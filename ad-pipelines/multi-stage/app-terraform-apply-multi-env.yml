@@ -1,0 +1,35 @@
+trigger: 'none'
+
+parameters:
+
+- name: infrastructure_component
+  displayName: 'Infrastructure Component'
+  type: string
+  default: none
+  values:
+  - app-platform
+  - app-storage
+  - app-key-vault
+  - app-iot-hub
+  - app-mssql
+  - app-functions
+  - app-aks
+
+- name: apply
+  displayName: Run Apply
+  default: false
+  type: boolean
+
+pool: 'Clinical-Platform-Hub'
+
+stages:
+- stage: terraform_plan_prd
+  variables:
+    - group: cp-pfm-eaus-prd
+  jobs:
+  - job: terraform_plan
+    displayName: Terraform Init & Plan ${{parameters.infrastructure_component}}  
+- template: terraform-plan.yml
+  parameters:
+    infrastructure_component: ${{parameters.infrastructure_component}} 
+

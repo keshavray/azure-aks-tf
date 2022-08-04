@@ -1,0 +1,39 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger: 'none'
+
+parameters:
+
+- name: environment
+  displayName: 'Environment to deploy'
+  type: string
+  default: none
+  values:
+  - dev
+  - stg
+  - prd
+
+- name: subscription_spn
+  displayName: 'Azure Subscription'
+  type: string
+  default: none
+  values:
+  - Azure-DevOps-CP-Prod-SPN
+  - Azure-DevOps-CP-Dev-SPN
+  - Azure-DevOps-CP-Stg-SPN
+
+pool:
+  vmImage: 'windows-2019'
+
+variables:
+  - group: 'CP-${{parameters.environment}}-IaC'
+steps:
+- task: AzureCLI@2
+  inputs:
+    azureSubscription: '${{parameters.subscription_spn}}'
+    scriptType: 'ps'
+    scriptLocation: 'scriptPath'
+    scriptPath: 'bootstrap/app-storage.ps1'

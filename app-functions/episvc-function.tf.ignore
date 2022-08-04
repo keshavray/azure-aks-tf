@@ -1,0 +1,46 @@
+module "episvcfunction" {
+
+  source = ".//modules//az-function"
+
+  product                 = var.product
+  squad                   = var.squad
+  environment             = var.environment
+  role                    = var.role
+  description             = var.description
+  app_name                = "epicsvc"
+  tags                    = local.tags
+  resource_group_location = var.resource_group_location
+  location                = var.location
+
+  #identity_ids = azurerm_user_assigned_identity.acr-identity.id
+
+  storagetier         = "Standard"
+  storage_replication = "LRS"
+
+  kind         = "elastic"
+  reserved     = true
+  worker_count = 1
+  sku_tier     = "ElasticPremium"
+  sku_size     = "EP1"
+
+  #############################
+  # Function App Service Plan #
+  #############################
+  app_version             = "~3"
+  https_only              = false
+  client_affinity_enabled = false
+  always_on               = false
+  #linux_fx_version        = "DOCKER|mcr.microsoft.com/azure-functions/dotnet:3.0-appservice-quickstart"
+  min_tls_version         = "1.2"
+  os_type                 = "linux"
+/*   app_settings = {
+    DOCKER_REGISTRY_SERVER_URL                = "${data.azurerm_container_registry.registry.login_server}"
+    DOCKER_REGISTRY_SERVER_USERNAME           = "${data.azurerm_container_registry.registry.admin_username}"
+    DOCKER_REGISTRY_SERVER_PASSWORD           = "${data.azurerm_container_registry.registry.admin_password}"
+    #SERVICEBUS_READ                = "${data.azurerm_servicebus_namespace_authorization_rule.functions_read.primary_connection_string}"
+    #SERVICE_NAME = "demo"
+    #DB_HOST                        = "da-attach-pgsql-${var.location}-${var.environment}.postgres.database.azure.com"
+    #DB_PORT = "1433"
+    WEBSITES_ENABLE_APP_SERVICE_STORAGE       = false
+  } */
+}

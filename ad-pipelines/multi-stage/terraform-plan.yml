@@ -1,0 +1,46 @@
+parameters:
+  infrastructure_component: ''
+
+stages:
+
+  - stage: terraform_plan
+    jobs:
+    - job: terraform_plan
+      displayName: Terraform Init & Plan ${{parameters.infrastructure_component}}
+      workspace:
+        clean: all
+      steps:
+
+      - task: replacetokens@3
+        displayName: 'Replace tokens in static_variables files'
+        inputs:
+          targetFiles: |
+            $(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}/*.tf
+            $(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}/environment/*.tfvars
+          encoding: 'auto'
+          writeBOM: true
+          actionOnMissing: 'warn'
+          keepToken: false
+          tokenPrefix: '#{'
+          tokenSuffix: '}#'
+          useLegacyPattern: false
+          enableTelemetry: false
+    
+      - task: TerraformTaskV1@0
+        inputs:
+          provider: 'azurerm'
+          command: 'init'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}'
+          backendServiceArm: 'Azure-DevOps-CP-Prod-SPN'
+          backendAzureRmResourceGroupName: 'cp-tf-state-rg-$(loc)-$(env)'
+          backendAzureRmStorageAccountName: 'cptfstr$(loc)$(env)'
+          backendAzureRmContainerName: 'tfstate'
+          backendAzureRmKey: '${{parameters.infrastructure_component}}.tfstate'
+
+      - task: TerraformTaskV1@0
+        inputs:
+          provider: 'azurerm'
+          command: 'plan'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}'
+          commandOptions: '-var-file="environment/$(env)-$(loc).tfvars"'
+          environmentServiceNameAzureRM: 'Azure-DevOps-CP-Prod-SPN'

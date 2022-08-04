@@ -1,0 +1,148 @@
+trigger: 'none'
+
+parameters:
+
+- name: environment
+  displayName: 'Environment to deploy'
+  type: string
+  default: none
+  values:
+  - dev
+  - stg
+  - prd
+
+- name: infrastructure_component
+  displayName: 'Infrastructure Component'
+  type: string
+  default: none
+  values:
+  - app-platform
+  #- app-key-vault
+  - app-iot-hub
+  - app-mssql
+  - app-functions
+  - app-search
+  - app-aks
+  - app-tfstate
+  - app-peering
+
+- name: subscription_spn
+  displayName: 'Azure Subscription'
+  type: string
+  default: none
+  values:
+  - Azure-DevOps-CP-Dev-SPN
+  - Azure-DevOps-CP-Stg-SPN
+  - Azure-DevOps-CP-Prod-SPN
+
+
+- name: apply
+  displayName: Run Apply
+  default: false
+  type: boolean
+
+pool: 'Clinical-Platform'
+
+stages:
+
+  - stage: terraform_plan
+    variables:
+    - group: CP-Common-IaC
+    - group: CP-Hub-IaC
+    - group: 'CP-${{parameters.environment}}-IaC'
+    jobs:
+    - job: terraform_plan
+      displayName: Terraform Init & Plan ${{parameters.infrastructure_component}}
+      workspace:
+        clean: all
+      steps:
+
+      - task: replacetokens@3
+        displayName: 'Replace tokens in static_variables files'
+        inputs:
+          targetFiles: |
+            $(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}/*.tf
+            $(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}/environment/*.tfvars
+          encoding: 'auto'
+          writeBOM: true
+          actionOnMissing: 'warn'
+          keepToken: false
+          tokenPrefix: '#{'
+          tokenSuffix: '}#'
+          useLegacyPattern: false
+          enableTelemetry: false
+    
+      - task: TerraformTaskV1@0
+        inputs:
+          provider: 'azurerm'
+          command: 'init'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}'
+          backendServiceArm: ${{parameters.subscription_spn}}
+          backendAzureRmResourceGroupName: 'cp-tf-state-rg-$(loc)-$(env)'
+          backendAzureRmStorageAccountName: 'cptfstr1$(loc)$(env)'
+          backendAzureRmContainerName: 'tfstate'
+          backendAzureRmKey: '${{parameters.infrastructure_component}}.tfstate'
+
+      - task: TerraformTaskV1@0
+        inputs:
+          provider: 'azurerm'
+          command: 'plan'
+          workingDirectory: '$(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}'
+          commandOptions: '-var-file="environment/$(env)-$(loc).tfvars"'
+          environmentServiceNameAzureRM: ${{parameters.subscription_spn}}
+
+  - stage: terraform_apply
+    variables:
+    - group: CP-Common-IaC
+    - group: CP-Hub-IaC
+    - group: 'CP-${{parameters.environment}}-IaC'
+    dependsOn: terraform_plan
+    condition: and(succeeded('terraform_plan'), eq(${{parameters.apply}}, 'true'))
+    jobs:
+    - deployment: terraform_apply
+      displayName: Terraform Apply ${{parameters.infrastructure_component}}
+      environment: prd
+      pool: 'Clinical-Platform'
+      workspace:
+        clean: all
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - checkout: self
+            
+            - task: replacetokens@3
+              displayName: 'Replace tokens in static_variables files'
+              inputs:
+                targetFiles: |
+                  $(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}/*.tf
+                  $(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}/environment/*.tfvars
+                encoding: 'auto'
+                writeBOM: true
+                actionOnMissing: 'warn'
+                keepToken: false
+                tokenPrefix: '#{'
+                tokenSuffix: '}#'
+                useLegacyPattern: false
+                enableTelemetry: false
+            
+            - task: TerraformTaskV1@0
+              inputs:
+                provider: 'azurerm'
+                command: 'init'
+                workingDirectory: '$(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}'
+                backendServiceArm: ${{parameters.subscription_spn}}
+                backendAzureRmResourceGroupName: 'cp-tf-state-rg-$(loc)-$(env)'
+                backendAzureRmStorageAccountName: 'cptfstr1$(loc)$(env)'
+                backendAzureRmContainerName: 'tfstate'
+                backendAzureRmKey: '${{parameters.infrastructure_component}}.tfstate'
+
+            - task: TerraformTaskV1@0
+              inputs:
+                provider: 'azurerm'
+                command: 'apply'
+                workingDirectory: '$(System.DefaultWorkingDirectory)/${{parameters.infrastructure_component}}'
+                commandOptions: '-auto-approve -var-file="environment/$(env)-$(loc).tfvars"'
+                environmentServiceNameAzureRM: ${{parameters.subscription_spn}}
+
+

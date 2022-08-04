@@ -1,0 +1,21 @@
+data "azurerm_storage_account" "service1-storage" {
+  name                = join("", [var.product, "svc1tcfilestr", var.location, var.environment])
+  resource_group_name = join("-", [var.product, "stc-rg", var.location, var.environment])
+}
+
+
+resource "azurerm_user_assigned_identity" "service1_aad_pod_identity" {
+  resource_group_name = azurerm_kubernetes_cluster.k8s.node_resource_group
+  location            = azurerm_resource_group.rg.location
+
+  name = join("-", [var.product, "service1-aad-pod-uaid", var.location, var.environment])
+
+  tags = local.tags
+}
+
+resource "azurerm_role_assignment" "service1_aad_pod_role" {
+  scope                = data.azurerm_storage_account.service1-storage.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.service1_aad_pod_identity.principal_id
+
+}
